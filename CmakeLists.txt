@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
+
+#remove this when modifying cmake folders
+set(CMAKE_CXX_STANDARD 17)
+project(VulkanProj LANGUAGES CXX)
+
+set(MAIN_PROJECT_NAME Demo)
+
+add_subdirectory(Renderer)
+include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Renderer/Header)
+
+add_subdirectory(Math)
+include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Math/Header)
+
+
+set(PROJECT_NAME Demo)
+find_package(Vulkan REQUIRED COMPONENTS glslc)
+include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
+
+file(GLOB_RECURSE SOURCE_FILES 
+	${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/Source/*.c
+	${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/Source/*.cc
+	${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/Source/*.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/Source/*.cxx
+	${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/Source/*.c++)
+
+set(PROJECT_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/Header)
+file(GLOB_RECURSE HEADER_FILES 
+	${PROJECT_INCLUDE_DIR}/*.h
+	${PROJECT_INCLUDE_DIR}/*.hpp
+	${PROJECT_INCLUDE_DIR}/*.inl)
+	
+add_executable(${PROJECT_NAME} ${HEADER_FILES} ${SOURCE_FILES})
+
+set_target_properties(Demo PROPERTIES
+	VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration))
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE Renderer Math)
+  
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})

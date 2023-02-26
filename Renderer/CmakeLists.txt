@@ -1,0 +1,124 @@
+# set the project name
+get_filename_component(CURRENT_FOLDER_NAME ${CMAKE_CURRENT_LIST_DIR} NAME)
+set(PROJECT_NAME ${CURRENT_FOLDER_NAME})
+
+cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
+include(FetchContent)
+
+#glfw
+FetchContent_Declare(
+	glfw
+	GIT_REPOSITORY https://github.com/glfw/glfw.git
+	GIT_TAG 3.3.8)
+
+FetchContent_Declare(
+	assimp
+	GIT_REPOSITORY https://github.com/assimp/assimp.git
+	GIT_TAG v5.2.5)
+	
+#glm -->Libmaths
+#FetchContent_Declare(
+#	glm
+#	GIT_REPOSITORY https://github.com/g-truc/glm.git
+#	GIT_TAG 0.9.9.8)
+	
+#vulkan
+find_package(Vulkan REQUIRED COMPONENTS glslc)
+
+#sources 
+file(GLOB_RECURSE TARGET_HEADER_FILES
+	${CMAKE_CURRENT_SOURCE_DIR}/*.h
+	${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/*.inl)
+	
+file(GLOB_RECURSE TARGET_SOURCE_FILES
+	${CMAKE_CURRENT_SOURCE_DIR}/*.c
+	${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/*.cc
+	${CMAKE_CURRENT_SOURCE_DIR}/*.cxx
+	${CMAKE_CURRENT_SOURCE_DIR}/*.c++)
+
+file(GLOB_RECURSE TARGET_SHADER_FILES #any name for extentions --> choice 
+	${CMAKE_CURRENT_SOURCE_DIR}/*.vert
+	${CMAKE_CURRENT_SOURCE_DIR}/*.frag
+	${CMAKE_CURRENT_SOURCE_DIR}/*.geom
+	${CMAKE_CURRENT_SOURCE_DIR}/*.tesc
+	${CMAKE_CURRENT_SOURCE_DIR}/*.tese
+	${CMAKE_CURRENT_SOURCE_DIR}/*.comp
+	${CMAKE_CURRENT_SOURCE_DIR}/*.glsl)
+
+file(GLOB_RECURSE TARGET_EXTRA_FILES
+	${CMAKE_CURRENT_SOURCE_DIR}/*.txt
+	${CMAKE_CURRENT_SOURCE_DIR}/*.md)
+	
+set(TARGET_FILES ${TARGET_HEADER_FILES} ${TARGET_SOURCE_FILES} ${TARGET_SHADER_FILES} ${TARGET_EXTRA_FILES})
+
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${TARGET_FILES}) #generate vs filter
+
+set(TARGET_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Header)
+
+#Executable
+
+set(GLFW_BUILD_TESTS OFF)
+set(GLFW_BUILD_EXAMPLES OFF)
+FetchContent_MakeAvailable(glfw)
+FetchContent_MakeAvailable(assimp)
+
+get_filename_component(TARGET_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+
+add_library(${PROJECT_NAME} STATIC)
+target_sources(${PROJECT_NAME} PRIVATE ${TARGET_FILES})
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/math/Header)
+target_include_directories(${PROJECT_NAME} PRIVATE ${TARGET_INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} PRIVATE ${glfw_SOURCE_DIR}/include)
+#ADD libmaths HERE
+
+target_link_libraries(${PROJECT_NAME} PRIVATE ${Vulkan_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
+#target_include_directories(${PROJECT_NAME} PRIVATE ${assimp_SOURCE_DIR})
+target_link_libraries(${PROJECT_NAME} PRIVATE assimp)
+#target_link_libraries(${TARGET_NAME} PRIVATE glm)
+
+add_custom_command(
+	TARGET ${PROJECT_NAME} PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Assets
+	$<TARGET_FILE_DIR:${MAIN_PROJECT_NAME}>/Assets
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${CMAKE_CURRENT_SOURCE_DIR}/BuildLib
+        $<TARGET_FILE_DIR:${MAIN_PROJECT_NAME}>)
+
+#shader compilation
+set(SHADER_BINARIES_DIR ${CMAKE_BINARY_DIR}/$(Configuration))
+foreach(SHADER_FILE IN LISTS TARGET_SHADER_FILES)
+	string(REPLACE ${CMAKE_CURRENT_SOURCE_DIR} ${SHADER_BINARIES_DIR} SHADER_BINARY ${SHADER_FILE})
+	set(SHADER_BINARY ${SHADER_BINARY}.spv)
+	#generate matching folder hierachy inside the bin directory for the compiled shaders 
+	get_filename_component(SHADER_BINARY_DIR ${SHADER_BINARY} DIRECTORY)
+	file(MAKE_DIRECTORY ${SHADER_BINARY_DIR})
+	
+	message(${SHADER_FILE})
+	message(${SHADER_BINARY})
+	message(${Vulkan_GLSLC_EXECUTABLE})
+	message(STATUS ".")
+	add_custom_command(
+		#file to produce
+		OUTPUT ${SHADER_BINARY}
+		#compile shader using glslc
+		COMMAND ${Vulkan_GLSLC_EXECUTABLE} "${SHADER_FILE}" -o "${SHADER_BINARY}"
+		#run command if the following file change or output is missing
+		DEPENDS ${SHADER_FILE}
+		VERBATIM #OS convention is respected (linux \ and windows /)
+		)
+	set(SHADER_BINARIES ${SHADER_BINARIES} ${SHADER_BINARY})
+endforeach()
+
+set(SHADER_TARGET_NAME ${PROJECT_NAME}_shader)
+add_custom_target(${SHADER_TARGET_NAME} DEPENDS ${SHADER_BINARIES})
+
+add_dependencies(${PROJECT_NAME} ${SHADER_TARGET_NAME})
+	
